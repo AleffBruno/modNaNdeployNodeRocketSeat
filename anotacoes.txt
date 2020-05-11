@@ -1,0 +1,102 @@
+ESTE DEPLOY FOI FEITO USANDO O REPO "mod02-03goBarberBackendRocketSeat"
+url : https://github.com/AleffBruno/mod02-03goBarberBackendRocketSeat
+
+criando usuario no linux {
+    > $ adduser {NOME_DO_USUARIO}
+    > é necessario dar permissoes para o usuario, para ele poder ter ações com o 'sudo'
+    $ usermod -aG sudo {NOME_DO_USUARIO}
+    > SE a autenticação no servidor linux for por chaves publicar/privadas, é necessario liberar a conexao ssh para este novo usuario. {
+        > verifica/cria a pasta .ssh em /home/{NOME_DO_USUARIO}
+        > copia-se da pasta raiz do usuario root a 'chave' e coloca dentro de /home/{NOME_DO_USUARIO}/.ssh
+        $ cp ~/.ssh/authorized_keys /home/{NOME_DO_USUARIO}/.ssh
+        > é necessario trocar o dono do arquivo copiado
+        $ chown deploy:deploy authorized_keys
+    }
+}
+
+instalar node no linux {
+    > acessar o site do node
+    > abaixo de recommendedVersion, clicar em 'other downloads'
+    > ao final da pagina, clicar em 'Installing Node.js via package manager'
+    > procure por 'Debian and Ubuntu based Linux distributions, Enterprise Linux/Fedora and Snap packages', e apos isso , entrar no link que leva para o github ( https://github.com/nodesource/distributions/blob/master/README.md )
+    > procurar pela versçao desejada, e instalar....
+    $ curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+    $ sudo apt-get install -y nodejs
+}
+
+> clona-se a aplicação
+$ git clone {URL_CLONE_GIT}
+> se por acaso tiver .env, configure-o
+
+OPCIONAL: usar o '$ docker' sem '$ sudo' na frente {
+    procure por 'post-instalation step por linux docker'
+}
+
+criando os serviços com docker {
+    $ docker run --name postgres -e POSTGRES_PASSWORD=E6AOiKdUDcI2JmSHTLDRVOsRE0odJU0Y -p 5432:5432 -d -t postgres
+    $ docker run --name mongo -p 27017:27017 -d -t mongo
+    $ docker run --name redis -p 6379:6379 -d -t redis:alphine  ( NAO INSTALEI, PQ NAO QUERIA USAR NO MOMENTO )
+    > verifica-se se os containers estao ligados com $ docker ps
+    > apos isso, atualize o .env com as informações...
+    DB_USER=postgres ( usuario padrao do postgres )
+    DB_PASS={POSTGRES_PASSWORD} colocado na criação do container docker-postgres
+    DB_NAME={QUALQUER_NOME}  é necessario criar esse banco de dados no postgres ainda....   
+    MONGO_URL=mongodb://localhost:27017/{NOME_DO_BANCO_SE_NAO_EXISTIR_ELE_CRIA}
+    > criar o banco no postgres, primeiro entre dentro do container do postgres
+    $ docker exec -i -t postgres /bin/sh   , apos isso, sera levado para o bash do postgres
+    $ su postgres
+    $ psql
+    > pronto, agora estamos dentro do postgres, com isso pode-se criar o banco
+    $ CREATE DATABASE bootcampnodejs;
+    > saia do container ( $ exit / crtl+d )
+    > rode as migrations ( $ npx sequelize db:migrate )
+    > no cenario atual, existem 2 script para produção ( build e start )
+    $ yarn build && yarn start
+    > verifique se as portas estão liberadas [tanto no servidor quanto no PAINEL azure/aws/googleCloud/etc....] ( no caso o projeto usa a 3333 ) {
+        $ sudo ufw allow 3333
+    }
+}
+
+configurando NGINX , mudar da porta 3333 para a padrao 80 {
+    $ sudo apt install nginx
+    $ sudo ufw allow 80
+    $ sudo vim /etc/nginx/sites-available/default {
+        > configure location...
+        location / {
+                # First attempt to serve request as file, then
+                # as directory, then fall back to displaying a 404.
+                proxy_pass http://localhost:3333;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+        }
+
+    }
+    $ sudo service nginx restart
+    $ sudo nginx -t ( verifica se ta tudo certo )
+    > rode a aplicação para testar ( $ yarn start )
+}
+
+PM2 , deixando a aplicação rodando {
+    $ npm i -g pm2
+    $ pm2 start {LOCAL_DO_ARQUIVO_'INDEX.JS'_DA_APP_NODE} {
+        ex : $ pm2 start dist/server.js
+    }
+    $ pm2 list ( mostra oque ta online )
+    > para quando o servidor for restartado/desligado-ligado o pm2 start/suba a plicação novamente, siga os passos abaixo
+    $ pm2 startup systemd
+    $ pm2 monit ( monitora as aplicações, se tiver console.log, tambem mostra )
+}
+
+FALHEI !!!!, nao consegui configurar no buddy.works
+Integração continua {
+    > toda vida que um novo commit for enviado para o repo, sera executado npm run build, npm run start e etc....
+    > acesse https://buddy.works/
+    > logue-se com github
+    > o plano free so deixa 5 CI
+    > adicione a pipeLine ( oque fazer ao receber o commit )
+    > selecione "on Push" e o branch 'master'
+}
+
